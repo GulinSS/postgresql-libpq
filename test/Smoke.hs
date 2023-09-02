@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Database.PostgreSQL.LibPQ
 import Data.Foldable (toList)
 import System.Environment (getEnvironment)
@@ -48,6 +48,14 @@ smoke connstring = do
     transactionStatus conn >>= print
     protocolVersion conn   >>= print
     serverVersion conn     >>= print
+
+    when isEnabledPipeline $ do
+        enterPipelineMode conn >>= print
+        pipelineStatus conn    >>= print
+        sendFlushRequest conn  >>= print
+        pipelineSync conn      >>= print
+        getResult conn         >>= traverse resultStatus >>= print
+        exitPipelineMode conn  >>= print
 
     s <- status conn
     unless (s == ConnectionOk) exitFailure

@@ -41,6 +41,9 @@ data ExecStatus
                     -- from the current command. This status occurs
                     -- only when single-row mode has been selected
                     -- for the query.
+    | PipelineSync  -- ^ The PGresult represents a synchronization
+                    -- point in pipeline mode, requested by PQpipelineSync.
+                    -- This status occurs only when pipeline mode has been selected.
   deriving (Eq, Show)
 
 instance FromCInt ExecStatus where
@@ -54,6 +57,9 @@ instance FromCInt ExecStatus where
     fromCInt (#const PGRES_NONFATAL_ERROR) = Just NonfatalError
     fromCInt (#const PGRES_FATAL_ERROR)    = Just FatalError
     fromCInt (#const PGRES_SINGLE_TUPLE)   = Just SingleTuple
+    #if HASKELL_LIBPQ_PIPELINE_MODE
+    fromCInt (#const PGRES_PIPELINE_SYNC)  = Just PipelineSync
+    #endif
     fromCInt _ = Nothing
 
 instance ToCInt ExecStatus where
@@ -67,6 +73,11 @@ instance ToCInt ExecStatus where
     toCInt NonfatalError = (#const PGRES_NONFATAL_ERROR)
     toCInt FatalError    = (#const PGRES_FATAL_ERROR)
     toCInt SingleTuple   = (#const PGRES_SINGLE_TUPLE)
+    #if HASKELL_LIBPQ_PIPELINE_MODE
+    toCInt PipelineSync  = (#const PGRES_PIPELINE_SYNC)
+    #else
+    toCInt PipelineSync  = error "pipeline mode is disabled"
+    #endif
 
 
 data FieldCode
@@ -230,7 +241,7 @@ instance FromCInt ConnStatus where
     fromCInt (#const CONNECTION_SSL_STARTUP)       = return ConnectionSSLStartup
     -- fromCInt (#const CONNECTION_NEEDED)         = return ConnectionNeeded
     fromCInt _ = Nothing
-    
+
 
 data TransactionStatus
     = TransIdle    -- ^ currently idle
@@ -262,6 +273,42 @@ instance FromCInt Format where
     fromCInt 0 = Just Text
     fromCInt 1 = Just Binary
     fromCInt _ = Nothing
+
+data PipelineStatus
+    = PipelineOn      -- ^ The connection is in pipeline mode.
+    | PipelineOff     -- ^ The connection is not in pipeline mode.
+    | PipelineAborted -- ^ The connection is in pipeline mode and
+                      -- an error occurred while processing
+                      -- the current pipeline.
+                      -- The aborted flag is cleared when
+                      -- PQgetResult returns a result of
+                      -- type PGRES_PIPELINE_SYNC.
+  deriving (Eq, Show)
+
+instance FromCInt PipelineStatus where
+    #if HASKELL_LIBPQ_PIPELINE_MODE
+    fromCInt (#const PQ_PIPELINE_ON)      = Just PipelineOn
+    fromCInt (#const PQ_PIPELINE_OFF)     = Just PipelineOff
+    fromCInt (#const PQ_PIPELINE_ABORTED) = Just PipelineAborted
+    #endif
+    fromCInt _ = Nothing
+
+instance ToCInt PipelineStatus where
+    #if HASKELL_LIBPQ_PIPELINE_MODE
+    toCInt PipelineOn      = (#const PQ_PIPELINE_ON)
+    #else
+    toCInt PipelineOn      = error "pipeline mode is disabled"
+    #endif
+    #if HASKELL_LIBPQ_PIPELINE_MODE
+    toCInt PipelineOff     = (#const PQ_PIPELINE_OFF)
+    #else
+    toCInt PipelineOff     = error "pipeline mode is disabled"
+    #endif
+    #if HASKELL_LIBPQ_PIPELINE_MODE
+    toCInt PipelineAborted = (#const PQ_PIPELINE_ABORTED)
+    #else
+    toCInt PipelineAborted = error "pipeline mode is disabled"
+    #endif
 
 -------------------------------------------------------------------------------
 -- System.IO enumerations
